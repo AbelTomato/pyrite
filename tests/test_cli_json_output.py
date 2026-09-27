@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from click import unstyle
 import pytest
 from typer.testing import CliRunner
 
@@ -329,12 +330,13 @@ def test_search_without_include_body_omits_body_field(cli_env):
 def test_unknown_format_is_a_usage_error(command, invalid_format):
     """Unknown --format values fail during argument parsing, not serialization."""
     result = runner.invoke(app, [*command, "--format", invalid_format])
+    output = unstyle(result.output)
 
     assert result.exit_code == 2, result.output
-    assert "Traceback" not in result.output
-    assert result.output.count("Invalid value for '--format'") == 1, result.output
-    assert invalid_format in result.output
-    assert "error_type" not in result.output
+    assert "Traceback" not in output
+    assert output.count("Invalid value for '--format'") == 1, result.output
+    assert invalid_format in output
+    assert "error_type" not in output
 
 
 @pytest.mark.cli
