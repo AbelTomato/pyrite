@@ -318,6 +318,26 @@ def test_search_without_include_body_omits_body_field(cli_env):
 
 
 @pytest.mark.cli
+@pytest.mark.parametrize(
+    ("command", "invalid_format"),
+    [
+        (["get", "any-entry"], "bogus"),
+        (["search", "anything"], "jsonl"),
+    ],
+    ids=["get", "search"],
+)
+def test_unknown_format_is_a_usage_error(command, invalid_format):
+    """Unknown --format values fail during argument parsing, not serialization."""
+    result = runner.invoke(app, [*command, "--format", invalid_format])
+
+    assert result.exit_code == 2, result.output
+    assert "Traceback" not in result.output
+    assert result.output.count("Invalid value for '--format'") == 1, result.output
+    assert invalid_format in result.output
+    assert "error_type" not in result.output
+
+
+@pytest.mark.cli
 def test_search_error_json_is_clean_structured_error(cli_env):
     """When the index search raises, -f json must emit a clean structured
     error object (error + error_type) and exit non-zero — never a mix of
