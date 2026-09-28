@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from click import unstyle
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from pyrite.cli import app
