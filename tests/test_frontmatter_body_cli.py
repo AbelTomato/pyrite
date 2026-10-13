@@ -1,6 +1,7 @@
 """#820: report possible frontmatter leaks, and keep body text through the CLI."""
 
 import json
+from datetime import date
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,7 @@ from pyrite.cli import app
 from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.storage.database import PyriteDB
 from pyrite.utils.frontmatter import Frontmatter, split_frontmatter
+from pyrite.utils.frontmatter import leaked_frontmatter_line
 
 
 @pytest.fixture
@@ -140,3 +142,46 @@ def test_qa_validate_reports_matching_first_body_line_without_repair(
         assert findings[0]["field"] == field
         assert findings[0]["severity"] == "warning"
     assert path.read_bytes() == before
+
+
+@pytest.mark.timeout(3)
+def test_leaked_frontmatter_line_handles_a_long_value_in_linear_time():
+    line = "title: " + "a" + " " * 32_000 + "Probe"
+
+    assert leaked_frontmatter_line({"title": "Probe"}, line) is None
+
+
+@pytest.mark.parametrize(
+    ("frontmatter", "body"),
+    [
+        ({"date": date(2025, 2, 1)}, "date: 2025-02-01"),
+        ({"date": "2025-02-01"}, "date: 2025-02-01"),
+        ({"created_at": date(2025, 2, 1)}, "created_at: 2025-02-01"),
+    ],
+)
+def test_leaked_frontmatter_line_matches_date_scalars(frontmatter, body):
+    key = next(iter(frontmatter))
+
+    assert leaked_frontmatter_line(frontmatter, body) == (key, body)
+
+
+def test_leaked_frontmatter_line_compares_scalar_types_and_returns_source_line():
+    assert leaked_frontmatter_line({"importance": 1}, "importance: true") is None
+    assert leaked_frontmatter_line({"title": "Probe"}, 'title: "Probe"') == (
+        "title",
+        'title: "Probe"',
+    )
+
+
+def test_qa_validate_warning_quotes_the_exact_body_line(cli_env):
+    invoke, _ = cli_env
+    path = create_note(cli_env, 'title: "Probe"')
+
+    result = invoke(["qa", "validate", "notes", "--entry", path.stem, "--format", "json"])
+
+    issue = next(
+        item
+        for item in json.loads(result.output)["issues"]
+        if item["rule"] == "frontmatter_line_in_body"
+    )
+    assert "body starts with 'title: \"Probe\"'" in issue["message"]

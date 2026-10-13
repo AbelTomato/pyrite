@@ -55,11 +55,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any
 
 from ..exceptions import FrontmatterError
 
-_BODY_FIELD_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*?)\s*$")
+_BODY_FIELD_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*")
 
 _BOM = "﻿"
 _LEADING = re.compile(r"(?:[ \t\r]*\n)*")
@@ -197,7 +198,7 @@ def load_frontmatter(text: str) -> tuple[dict[str, Any], str] | None:
     return load_yaml(split.text), split.body
 
 
-def leaked_frontmatter_line(frontmatter: dict[str, Any], body: str) -> tuple[str, Any] | None:
+def leaked_frontmatter_line(frontmatter: dict[str, Any], body: str) -> tuple[str, str] | None:
     """Return a body line that repeats one exact scalar frontmatter field.
 
     A migration can leave the first frontmatter field rendered as prose.  The
@@ -210,13 +211,28 @@ def leaked_frontmatter_line(frontmatter: dict[str, Any], body: str) -> tuple[str
     match = _BODY_FIELD_LINE.match(first)
     if not match:
         return None
-    key, raw_value = match.groups()
-    if key not in frontmatter or not isinstance(frontmatter[key], (str, int, float, bool)):
+    key = match.group(1)
+    value = frontmatter.get(key)
+    scalar_types = (str, int, float, bool, date, datetime)
+    if key not in frontmatter or not isinstance(value, scalar_types):
         return None
     try:
+        raw_value = first[match.end() :].rstrip(" \t")
         parsed = load_yaml(f"{key}: {raw_value}\n")[key]
     except Exception:
         return None
-    if parsed == frontmatter[key]:
-        return key, parsed
+    if isinstance(parsed, date) and isinstance(value, date):
+        same_scalar_type = True
+    elif isinstance(parsed, bool) or isinstance(value, bool):
+        same_scalar_type = isinstance(parsed, bool) and isinstance(value, bool)
+    elif isinstance(parsed, (int, float)) or isinstance(value, (int, float)):
+        same_scalar_type = isinstance(parsed, (int, float)) and isinstance(value, (int, float))
+    else:
+        same_scalar_type = isinstance(parsed, str) and isinstance(value, str)
+    if same_scalar_type and parsed == value:
+        return key, first
+    if isinstance(parsed, date) and isinstance(value, str) and parsed.isoformat() == value:
+        return key, first
+    if isinstance(value, date) and isinstance(parsed, str) and value.isoformat() == parsed:
+        return key, first
     return None

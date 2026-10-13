@@ -936,7 +936,7 @@ class QAService:
             if entry._source_frontmatter is not None:
                 leaked = leaked_frontmatter_line(entry._source_frontmatter, entry.body or "")
                 if leaked is not None:
-                    key, value = leaked
+                    key, line = leaked
                     issues.append(
                         {
                             "entry_id": entry.id,
@@ -945,7 +945,7 @@ class QAService:
                             "severity": "warning",
                             "field": key,
                             "message": (
-                                f"Entry '{entry.id}' body starts with '{key}: {value}', "
+                                f"Entry '{entry.id}' body starts with {line!r}, "
                                 "which repeats a frontmatter field; inspect the file "
                                 "for a migrated frontmatter leak."
                             ),
